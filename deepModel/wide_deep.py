@@ -5,6 +5,7 @@
 import tensorflow as tf
 import sys
 from dataUtils.load_tiny_train_input import load_data, get_batch
+tf.logging.set_verbosity(tf.logging.INFO)
 
 
 class WideDeepArgs(object):
