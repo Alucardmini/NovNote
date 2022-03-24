@@ -43,8 +43,8 @@ class FMModel(object):
 
     def build_model(self):
 
-        self.feat_value = tf.placeholder(name="feat_value", shape=[None, None], dtype=tf.float32)
-        self.feat_index = tf.placeholder(name="feat_index", shape=[None, None], dtype=tf.int32)
+        self.feat_value = tf.placeholder(name="feat_value", shape=[None, self.field_size], dtype=tf.float32)
+        self.feat_index = tf.placeholder(name="feat_index", shape=[None, self.field_size], dtype=tf.int32)
         self.label = tf.placeholder(name="label", shape=[None, None], dtype=tf.float32)
 
         w1 = tf.nn.embedding_lookup(self.weights["first_factor_weight"], self.feat_index)

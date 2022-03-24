@@ -38,16 +38,33 @@ def init_weights(field_size, feature_size, deep_layers):
     return weights
 
 
+def get_fc():
+
+    tf.feature_column.numeric_column()
+
+    # 'deep_layers': [512, 256],
+    # 'feature_size': data['feat_dim'],  # feature size
+    # 'field_size': len(data['xi'][0]),  # 域名
+    # 'deep_activation': tf.nn.relu
+
 def model_fn(features, labels, mode, params):
     feat_value = features['feat_value']
     feat_index = features['feat_index']
 
-    field_size = params['field_size']
-    feature_size = params['feature_size']
-    deep_layers = params['deep_layers']
-    deep_activation = params['deep_activation']
-    l2_reg_rate = params['l2_reg_rate']
-    learning_rate = params['learning_rate']
+    # deep_layers = params['deep_layers']
+    # feature_size = params['feature_size']
+    # field_size = params['field_size']
+    # deep_activation = params['deep_activation']
+    # l2_reg_rate = params['l2_reg_rate']
+    # learning_rate = params['learning_rate']
+
+    deep_layers = [512, 256]
+    feature_size = 69
+    field_size = 39
+    deep_activation = tf.nn.relu
+
+    l2_reg_rate = 0.05
+    learning_rate = 0.01
 
     weights = init_weights(field_size, feature_size, deep_layers)
 
@@ -88,27 +105,58 @@ def model_fn(features, labels, mode, params):
     eval_metric_ops = {"accuracy": tf.metrics.accuracy(tf.arg_max(out, 1), labels),
                        "auc": tf.metrics.auc(tf.reshape(labels, [-1, ]), tf.reshape(out, [-1, ]))}
 
-    return tf.estimator.EstimatorSpec(mode=mode, train_op=train_op, eval_metric_ops=eval_metric_ops, loss=loss)
+    accuracy = tf.metrics.accuracy(tf.arg_max(out, 1), labels)
+    tensors_to_log = {
+        "loss": loss,
+        "accuracy": accuracy[1]
+    }
+
+    logging_hook = tf.estimator.LoggingTensorHook(tensors=tensors_to_log, every_n_iter=30)
+
+    return tf.estimator.EstimatorSpec(mode=mode, train_op=train_op, eval_metric_ops=eval_metric_ops, loss=loss, training_hooks=[logging_hook])
+
 
 
 if __name__ == "__main__":
     path = "../sourcedatas/tiny_train_input.csv"
     data = load_data(path)
+    print(np.array(data['xv']).shape)
+    print(np.array(data['xi']).shape)
+    print("feature_size",data['feat_dim'])
+    print("field_size", len(data['xi'][0]))
+
     model_params = {
-                    'deep_layers': [512, 256],
-                    'feature_size': data['feat_dim'],  # feature size
-                    'field_size': len(data['xi'][0]),  # 域名
-                    'learning_rate': 0.05,
+                    # 'deep_layers': [512, 256],
+                    # 'feature_size': data['feat_dim'],  # feature size
+                    # 'field_size': len(data['xi'][0]),  # 域名
+                    'learning_rate': 0.1,
                     'l2_reg_rate': 0.005,
-                    'deep_activation': tf.nn.relu
+                    # 'deep_activation': tf.nn.relu
                     }
-    estimator = tf.estimator.Estimator(model_fn=model_fn, params=model_params, model_dir="model/wide_deep")
+    model = tf.estimator.Estimator(model_fn=model_fn, params=model_params, model_dir="model/wide_deep")
 
-    train_input_fn = tf.estimator.inputs.numpy_input_fn(x={"feat_value": np.array(data['xv']).astype(np.float32),
-                                                           "feat_index": np.array(data['xi'])},
-                                                        y=np.array(data['y_train']).astype(np.float32),
-                                                        num_epochs=2,
-                                                        batch_size=128,
-                                                        shuffle=True)
+    train_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(x=
+                                                                  {"feat_value": np.array(data['xv']).astype(np.float32),
+                                                                    "feat_index": np.array(data['xi']).astype(np.int32)},
+                                                                    y=np.array(data['y_train']).astype(np.float32),
+                                                                    num_epochs=2,
+                                                                    batch_size=128,
+                                                                    shuffle=True)
 
-    estimator.train(input_fn=train_input_fn, steps=3000)
+    model.train(input_fn=train_input_fn, steps=3000)
+
+
+    def serving_input_fn():
+        inputs = {
+            'feat_value': tf.compat.v1.placeholder(tf.float32, [None, 39]),
+            'feat_index': tf.compat.v1.placeholder(tf.int32, [None, 39])
+                  }
+
+        return tf.estimator.export.ServingInputReceiver(inputs, inputs)
+
+    #
+    print("===== export_model ====")
+
+    # model.export_savedmodel(export_dir_base="model/wide_deep/saved_model", serving_input_receiver_fn=serving_input_fn)
+
+
